@@ -7,6 +7,7 @@
 
 #include "server/config/network/http_connection_manager.h"
 
+#include "common/http/message_impl.h"
 #include "envoy/http/header_map.h"
 
 #include "common/common/hex.h"
@@ -17,18 +18,21 @@ namespace Solo {
 namespace Squash {
 
 SquashFilter::SquashFilter(Envoy::Upstream::ClusterManager& cm) :
+  cm_(cm),
   state_(SquashFilter::INITIAL),
-  timeout_(std::chrono::milliseconds(1000)), 
+  timeout_(std::chrono::milliseconds(1000)),
+  retry_count_(0),
+  delay_timer_(nullptr) {}
   
 
 SquashFilter::~SquashFilter() {}
 
 void SquashFilter::onDestroy() {}
 
-Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::HeaderMap& headers, bool end_stream) {
+Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::HeaderMap& headers, bool ) {
 
   // check for squash header
-  squashheader = headers.get(Envoy::Http::LowerCaseString("x-squash-debug"));
+  const Envoy::Http::HeaderEntry* squashheader = headers.get(Envoy::Http::LowerCaseString("x-squash-debug"));
 
   if (squashheader == nullptr) {
     return Envoy::Http::FilterHeadersStatus::Continue;    
@@ -36,9 +40,9 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
   
   // get pod and container name
   
-  std::string pod(std::getenv("POD_NAME"))
-  std::string container(std::getenv("CONTAINER_NAME"))
-  std::string image(std::getenv("IMAGE_NAME"))
+  std::string pod(std::getenv("POD_NAME"));
+  std::string container(std::getenv("CONTAINER_NAME"));
+  std::string image(std::getenv("IMAGE_NAME"));
   
   if (pod.empty()) {
     return Envoy::Http::FilterHeadersStatus::Continue;    
@@ -54,59 +58,61 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
   // retry until it is. or until we timeout
   // continue decoding.
   Envoy::Http::MessagePtr request(new Envoy::Http::RequestMessageImpl());
-  request->headers().insertContentType().value("application/json");
-  request->headers().insertPath().value("/debugconfigs");
-  request->headers().insertMethod().value("POST");
-  std::string body = "{ \"attachment\":{\"type\":\"container\",\"name\":"  + pod + "/" + container   "}, \"immediatly\" : true, \"debugger\":\"dlv\", \"image\" : \""+image+"\"}"
+  request->headers().insertContentType().value(std::string("application/json"));
+  request->headers().insertPath().value(std::string("/debugconfigs"));
+  request->headers().insertMethod().value(std::string("POST"));
+  std::string body = "{ \"attachment\":{\"type\":\"container\",\"name\":"  + pod + "/" + container  + 
+  "}, \"immediatly\" : true, \"debugger\":\"dlv\", \"image\" : \""+image+"\"}";
   request->body().reset(new Envoy::Buffer::OwnedImpl(body));
 
-  state_ = CREATE_CONFIG
+  state_ = CREATE_CONFIG;
   cm_.httpAsyncClientForCluster("squash").send(std::move(request), *this, timeout_);
 
   return Envoy::Http::FilterHeadersStatus::StopIteration;
 }
 
-void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) override {
+void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
  // if state === create config; state = creaed; if state == created ; state = null
- switch state_ {
+ switch (state_) {
 
   case INITIAL: {
     // Should never happen..
     break;
   }
   case CREATE_CONFIG: {
+    // get the config object that was created
     state_ = CHECK_ATTACHMENT;
-    Buffer::InstancePtr& data = m.body();
-    uint64_t num_slices = data.getRawSlices(nullptr, 0);
+    Envoy::Buffer::InstancePtr& data = m->body();
+    uint64_t num_slices = data->getRawSlices(nullptr, 0);
     Envoy::Buffer::RawSlice slices[num_slices];
-    data.getRawSlices(slices, num_slices);
+    data->getRawSlices(slices, num_slices);
     std::string jsonbody;
     for (Envoy::Buffer::RawSlice& slice : slices) {
-      jsonbody += std::string(slice.mem_, slice.len_);
+      jsonbody += std::string(static_cast<const char*>(slice.mem_), slice.len_);
     }
-    Envoy::Json::ObjectPtr json_config = Envoy::Json::Factory::loadFromString(jsonbody);
-    debugConfigId_ = json_config.getString("id");
+    Envoy::Json::ObjectSharedPtr json_config = Envoy::Json::Factory::loadFromString(jsonbody);
+    debugConfigId_ = json_config->getString("id");
     retry_count_ = 0;
     pollForAttachment();
     break;
   }
   case CHECK_ATTACHMENT: {
     bool attached = true;
-    if (attached || (rety_count > 10)) {
+    if (attached || (retry_count_ > 10)) {
       state_ = INITIAL;
       decoder_callbacks_->continueDecoding();
     } else {
-      delay_timer_ = callbacks_->dispatcher().createTimer([this]() -> void { pollForAttachment(); });
-      delay_timer_->enableTimer(std::chrono::milliseconds(1000)));
+      delay_timer_ = decoder_callbacks_->dispatcher().createTimer([this]() -> void { pollForAttachment(); });
+      delay_timer_->enableTimer(std::chrono::milliseconds(1000));
     }
     break;
   }
  }
 }
 
-void SquashFilter::onFailure(Envoy::Http::AsyncClient::FailureReason) override {
+void SquashFilter::onFailure(Envoy::Http::AsyncClient::FailureReason) {
   // increase retry count and try again.
-  if ((state_ != CHECK_ATTACHMENT) || (rety_count > 10)) {
+  if ((state_ != CHECK_ATTACHMENT) || (retry_count_ > 10)) {
     state_ = INITIAL;
     decoder_callbacks_->continueDecoding();
   } else {
@@ -122,7 +128,7 @@ void SquashFilter::pollForAttachment() {
 }
 
 
-Envoy::Http::FilterDataStatus SquashFilter::decodeData(Envoy::Buffer::Instance& data, bool end_stream) {
+Envoy::Http::FilterDataStatus SquashFilter::decodeData(Envoy::Buffer::Instance& , bool ) {
     return Envoy::Http::FilterDataStatus::Continue;    
 }
 

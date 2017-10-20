@@ -3,24 +3,15 @@
 #include <string>
 #include <map>
 
+#include "envoy/common/optional.h"
+
 #include "server/config/network/http_connection_manager.h"
 #include "envoy/upstream/cluster_manager.h"
 
 #include "common/common/logger.h"
 
-#include "aws_authenticator.h"
-
 namespace Solo {
 namespace Squash {
-
-struct Function {
-  std::string func_name_;
-  std::string hostname_;
-  std::string region_;
-};
-
-typedef std::map<std::string, Function> ClusterFunctionMap;
-
 
 class SquashFilter : public Envoy::Http::StreamDecoderFilter,  public Envoy::Logger::Loggable<Envoy::Logger::Id::filter> , public Envoy::Http::AsyncClient::Callbacks{
 public:
@@ -50,9 +41,11 @@ private:
   };
   State state_;
   std::string debugConfigId_;
-  Optional<std::chrono::milliseconds> timeout_;
+  Envoy::Optional<std::chrono::milliseconds> timeout_;
+  uint retry_count_;
+  Envoy::Event::TimerPtr delay_timer_;
   
-  pollForAttachment();
+  void pollForAttachment();
 };
 
 } // Http
