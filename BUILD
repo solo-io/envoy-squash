@@ -12,6 +12,7 @@ envoy_cc_binary(
     repository = "@envoy",
     deps = [
         ":squash_filter_config",
+        "@proxy//src/envoy/mixer:filter_lib",
         "@envoy//source/exe:envoy_main_entry_lib",
     ],
 )
