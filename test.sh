@@ -1,0 +1,1 @@
+curl -vvvv -H"x-squash-debug: debug" -H"Host: debug" http://localhost:8001
