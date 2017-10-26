@@ -33,17 +33,30 @@ void SquashFilter::onDestroy() {}
 Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::HeaderMap& headers, bool ) {
 
   // check for squash header
-  const Envoy::Http::HeaderEntry* squashheader = headers.get(Envoy::Http::LowerCaseString("x-squash-debug"));
+  const Envoy::Http::HeaderEntry* squasheader = headers.get(Envoy::Http::LowerCaseString("x-squash-debug"));
 
-  if (squashheader == nullptr) {
+  if (squasheader == nullptr) {
     return Envoy::Http::FilterHeadersStatus::Continue;    
   }
   
   // get pod and container name
-  
-  std::string pod(std::getenv("POD_NAME"));
-  std::string container(std::getenv("CONTAINER_NAME"));
-  std::string image(std::getenv("IMAGE_NAME"));
+  const char* podc = std::getenv("POD_NAME");
+  if (podc == nullptr) {
+    return Envoy::Http::FilterHeadersStatus::Continue;    
+  }
+  std::string pod(podc);
+
+  const char* containerc = std::getenv("CONTAINER_NAME");
+  if (containerc == nullptr) {
+    return Envoy::Http::FilterHeadersStatus::Continue;    
+  }
+
+  std::string container(containerc);
+  const char* imagec = std::getenv("IMAGE_NAME");
+  if (imagec == nullptr) {
+    return Envoy::Http::FilterHeadersStatus::Continue;    
+  }
+  std::string image(imagec);
   
   if (pod.empty()) {
     return Envoy::Http::FilterHeadersStatus::Continue;    
@@ -51,6 +64,14 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
  
   if (container.empty()) {
     return Envoy::Http::FilterHeadersStatus::Continue;    
+  }
+  
+  if (image.empty()) {
+    return Envoy::Http::FilterHeadersStatus::Continue;    
+  }
+
+  if (squasheader->value() != image.c_str()) {
+    return Envoy::Http::FilterHeadersStatus::Continue;        
   }
 
 
