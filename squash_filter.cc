@@ -17,13 +17,14 @@
 namespace Solo {
 namespace Squash {
 
+const char* squash_cluster_name = "out.bcd9053e66896f879e365719292f3da2be930f77";
+
 SquashFilter::SquashFilter(Envoy::Upstream::ClusterManager& cm) :
   cm_(cm),
   state_(SquashFilter::INITIAL),
   timeout_(std::chrono::milliseconds(1000)),
   retry_count_(0),
   delay_timer_(nullptr) {}
-  
 
 SquashFilter::~SquashFilter() {}
 
@@ -46,10 +47,11 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
   
   if (pod.empty()) {
     return Envoy::Http::FilterHeadersStatus::Continue;    
- }
- if (container.empty()) {
-  return Envoy::Http::FilterHeadersStatus::Continue;    
-}
+  }
+ 
+  if (container.empty()) {
+    return Envoy::Http::FilterHeadersStatus::Continue;    
+  }
 
 
   // get squash service cluster object
@@ -67,7 +69,7 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
   request->body().reset(new Envoy::Buffer::OwnedImpl(body));
 
   state_ = CREATE_CONFIG;
-  cm_.httpAsyncClientForCluster("squash").send(std::move(request), *this, timeout_);
+  cm_.httpAsyncClientForCluster(squash_cluster_name).send(std::move(request), *this, timeout_);
 
   return Envoy::Http::FilterHeadersStatus::StopIteration;
 }
@@ -129,9 +131,8 @@ void SquashFilter::pollForAttachment() {
   request->headers().insertHost().value(std::string("squash"));
   request->headers().insertMethod().value(std::string("GET"));
   
-  cm_.httpAsyncClientForCluster("squash").send(std::move(request), *this, timeout_);
+  cm_.httpAsyncClientForCluster(squash_cluster_name).send(std::move(request), *this, timeout_);
 }
-
 
 Envoy::Http::FilterDataStatus SquashFilter::decodeData(Envoy::Buffer::Instance& , bool ) {
     return Envoy::Http::FilterDataStatus::Continue;    
