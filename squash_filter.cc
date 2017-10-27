@@ -96,8 +96,8 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
   request->headers().insertPath().value(std::string("/api/v1/debugconfig"));
   request->headers().insertHost().value(std::string("squash"));
   request->headers().insertMethod().value(std::string("POST"));
-  std::string body = "{ \"attachment\":{\"type\":\"container\",\"name\":\""  + pod + "/" + container  + 
-  "\"}, \"immediatly\" : true, \"debugger\":\"dlv\", \"image\" : \""+image+"\"}";
+  std::string body = "{ \"attachment\":{\"type\":\"container\",\"name\":\""  + pod + ":" + container  + 
+  "\"}, \"immediately\" : true, \"debugger\":\"dlv\", \"image\" : \""+image+"\"}";
   request->body().reset(new Envoy::Buffer::OwnedImpl(body));
 
   state_ = CREATE_CONFIG;
