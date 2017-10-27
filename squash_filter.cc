@@ -35,45 +35,56 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
   // check for squash header
   const Envoy::Http::HeaderEntry* squasheader = headers.get(Envoy::Http::LowerCaseString("x-squash-debug"));
 
-  if (squasheader == nullptr) {
+  if (squasheader == nullptr) {  
+    ENVOY_LOG(warn, "Squash: no squash header. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;    
   }
   
   // get pod and container name
   const char* podc = std::getenv("POD_NAME");
   if (podc == nullptr) {
+    ENVOY_LOG(warn, "Squash: no podc. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;    
   }
   std::string pod(podc);
-
+  
   const char* containerc = std::getenv("CONTAINER_NAME");
   if (containerc == nullptr) {
+    ENVOY_LOG(warn, "Squash: no containerc. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;    
   }
-
+  
   std::string container(containerc);
   const char* imagec = std::getenv("IMAGE_NAME");
   if (imagec == nullptr) {
+    ENVOY_LOG(warn, "Squash: no imagec. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;    
   }
   std::string image(imagec);
   
   if (pod.empty()) {
+    ENVOY_LOG(warn, "Squash: no pod string. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;    
   }
- 
+  
   if (container.empty()) {
+    ENVOY_LOG(warn, "Squash: no container string. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;    
   }
   
   if (image.empty()) {
+    ENVOY_LOG(warn, "Squash: no image string. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;    
   }
 
   if (squasheader->value() != image.c_str()) {
+
+    ENVOY_LOG(warn, "Squash: image; {} != {}. ignoring.", squasheader->value().c_str(), image);
+    
     return Envoy::Http::FilterHeadersStatus::Continue;        
   }
-
+  
+  ENVOY_LOG(warn, "Squash:we need to squash something");
 
   // get squash service cluster object
   // async client to create debug config at squash server
