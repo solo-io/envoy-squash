@@ -17,6 +17,7 @@
 namespace Solo {
 namespace Squash {
 
+const int MAX_RETRY = 60;
 const char* squash_cluster_name = "out.bcd9053e66896f879e365719292f3da2be930f77";
 
 SquashFilter::SquashFilter(Envoy::Upstream::ClusterManager& cm) :
@@ -53,8 +54,8 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
     ENVOY_LOG(warn, "Squash: no containerc. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;    
   }
-  
   std::string container(containerc);
+  
   const char* imagec = std::getenv("IMAGE_NAME");
   if (imagec == nullptr) {
     ENVOY_LOG(warn, "Squash: no imagec. ignoring.");
@@ -134,7 +135,7 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
   case CHECK_ATTACHMENT: {
     Envoy::Json::ObjectSharedPtr json_config = Envoy::Json::Factory::loadFromString(jsonbody);
     bool attached = json_config->getBoolean("attached", false);
-    if (attached || (retry_count_ > 10)) {
+    if (attached || (retry_count_ > MAX_RETRY)) {
       state_ = INITIAL;
       decoder_callbacks_->continueDecoding();
     } else {
@@ -148,7 +149,7 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
 
 void SquashFilter::onFailure(Envoy::Http::AsyncClient::FailureReason) {
   // increase retry count and try again.
-  if ((state_ != CHECK_ATTACHMENT) || (retry_count_ > 10)) {
+  if ((state_ != CHECK_ATTACHMENT) || (retry_count_ > MAX_RETRY)) {
     state_ = INITIAL;
     decoder_callbacks_->continueDecoding();
   } else {
