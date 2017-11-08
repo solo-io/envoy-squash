@@ -137,9 +137,12 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
     bool attached = json_config->getBoolean("attached", false);
     if (attached || (retry_count_ > MAX_RETRY)) {
       state_ = INITIAL;
+      delay_timer_.reset();
       decoder_callbacks_->continueDecoding();
     } else {
-      delay_timer_ = decoder_callbacks_->dispatcher().createTimer([this]() -> void { pollForAttachment(); });
+      if (delay_timer_.get() == nullptr) {
+        delay_timer_ = decoder_callbacks_->dispatcher().createTimer([this]() -> void { pollForAttachment(); });
+      }
       delay_timer_->enableTimer(std::chrono::milliseconds(1000));
     }
     break;
@@ -168,11 +171,19 @@ void SquashFilter::pollForAttachment() {
 }
 
 Envoy::Http::FilterDataStatus SquashFilter::decodeData(Envoy::Buffer::Instance& , bool ) {
+  if (state_ == INITIAL) {
     return Envoy::Http::FilterDataStatus::Continue;    
+  } else {
+    return Envoy::Http::FilterDataStatus::StopIterationAndBuffer;
+  }
 }
 
 Envoy::Http::FilterTrailersStatus SquashFilter::decodeTrailers(Envoy::Http::HeaderMap&) {
-  return Envoy::Http::FilterTrailersStatus::Continue;
+  if (state_ == INITIAL) {
+    return Envoy::Http::FilterTrailersStatus::Continue;    
+  } else {
+    return Envoy::Http::FilterTrailersStatus::StopIteration;
+  }
 }
 
 void SquashFilter::setDecoderFilterCallbacks(Envoy::Http::StreamDecoderFilterCallbacks& callbacks) {
