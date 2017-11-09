@@ -25,11 +25,22 @@ SquashFilter::SquashFilter(Envoy::Upstream::ClusterManager& cm) :
   state_(SquashFilter::INITIAL),
   timeout_(std::chrono::milliseconds(1000)),
   retry_count_(0),
-  delay_timer_(nullptr) {}
+  delay_timer_(nullptr),
+  in_flight_request_(nullptr) {}
 
 SquashFilter::~SquashFilter() {}
 
-void SquashFilter::onDestroy() {}
+void SquashFilter::onDestroy() {
+  if (in_flight_request_ == nullptr) {
+    in_flight_request_->cancel();
+    in_flight_request_ = nullptr;
+  }
+  
+  if (delay_timer_.get() != nullptr) {
+    delay_timer_.reset();
+  }
+
+}
 
 Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::HeaderMap& headers, bool ) {
 
@@ -102,12 +113,13 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
   request->body().reset(new Envoy::Buffer::OwnedImpl(body));
 
   state_ = CREATE_CONFIG;
-  cm_.httpAsyncClientForCluster(squash_cluster_name).send(std::move(request), *this, timeout_);
+  in_flight_request_ = cm_.httpAsyncClientForCluster(squash_cluster_name).send(std::move(request), *this, timeout_);
 
   return Envoy::Http::FilterHeadersStatus::StopIteration;
 }
 
 void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
+  in_flight_request_ = nullptr;
   Envoy::Buffer::InstancePtr& data = m->body();
   uint64_t num_slices = data->getRawSlices(nullptr, 0);
   Envoy::Buffer::RawSlice slices[num_slices];
@@ -151,6 +163,7 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
 }
 
 void SquashFilter::onFailure(Envoy::Http::AsyncClient::FailureReason) {
+  in_flight_request_ = nullptr;
   // increase retry count and try again.
   if ((state_ != CHECK_ATTACHMENT) || (retry_count_ > MAX_RETRY)) {
     state_ = INITIAL;
@@ -167,7 +180,7 @@ void SquashFilter::pollForAttachment() {
   request->headers().insertHost().value(std::string("squash"));
   request->headers().insertMethod().value(std::string("GET"));
   
-  cm_.httpAsyncClientForCluster(squash_cluster_name).send(std::move(request), *this, timeout_);
+  in_flight_request_ = cm_.httpAsyncClientForCluster(squash_cluster_name).send(std::move(request), *this, timeout_);
 }
 
 Envoy::Http::FilterDataStatus SquashFilter::decodeData(Envoy::Buffer::Instance& , bool ) {

@@ -6,6 +6,8 @@
 #include "envoy/common/optional.h"
 
 #include "server/config/network/http_connection_manager.h"
+
+#include "envoy/http/async_client.h"
 #include "envoy/upstream/cluster_manager.h"
 
 #include "common/common/logger.h"
@@ -44,6 +46,7 @@ private:
   Envoy::Optional<std::chrono::milliseconds> timeout_;
   uint retry_count_;
   Envoy::Event::TimerPtr delay_timer_;
+  Envoy::Http::AsyncClient::Request* in_flight_request_;
   
   void pollForAttachment();
 };
