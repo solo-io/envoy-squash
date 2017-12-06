@@ -1,15 +1,10 @@
 
-PROXY_SHA = "7813a9ad548f63ce010c5ba90370989932b9acc9"  # Sep 26, 2017 (use github to download tclap instead of sourceforge)
+PROXY_SHA = "6a9fe308431755e19358b76da38738c5af250b04"
 
-# http_archive(
-#     name = "proxy",
-#     strip_prefix = "proxy-" + PROXY_SHA,
-#     url = "https://github.com/istio/proxy/archive/" + PROXY_SHA + ".zip",
-# )
-
-local_repository(
+http_archive(
     name = "proxy",
-    path = "/home/yuval/Projects/solo/proxy/",
+    strip_prefix = "proxy-" + PROXY_SHA,
+    url = "https://github.com/istio/proxy/archive/" + PROXY_SHA + ".zip",
 )
 
 load(
@@ -21,11 +16,8 @@ mixer_client_repositories()
 
 load(
     "@mixerclient_git//:repositories.bzl",
-    "googleapis_repositories",
     "mixerapi_repositories",
 )
-
-googleapis_repositories()
 
 mixerapi_repositories()
 
@@ -34,7 +26,7 @@ bind(
     actual = "//external:ssl",
 )
 
-ENVOY_SHA = "6cb0983a1ce74c55aaf0124bd2227be8f9efa2de"  # Sep 26, 2017 (use github to download tclap instead of sourceforge)
+ENVOY_SHA = "e593fedc3232fbb694f3ec985567a2c7dff05212"  # Oct 31, 2017
 
 http_archive(
     name = "envoy",
@@ -44,7 +36,7 @@ http_archive(
 
 load("@envoy//bazel:repositories.bzl", "envoy_dependencies")
 
-envoy_dependencies()
+envoy_dependencies(repository="@envoy", skip_targets=["io_bazel_rules_go"])
 
 load("@envoy//bazel:cc_configure.bzl", "cc_configure")
 
@@ -61,17 +53,16 @@ git_repository(
     remote = "https://github.com/bazelbuild/rules_go.git",
 )
 
-load("@io_bazel_rules_go//go:def.bzl", "go_rules_dependencies", "go_register_toolchains")
-go_rules_dependencies()
-go_register_toolchains()
+load("@mixerapi_git//:api_dependencies.bzl", "mixer_api_for_proxy_dependencies")
+mixer_api_for_proxy_dependencies()
 
-load("@io_bazel_rules_go//proto:def.bzl", "proto_register_toolchains")
-proto_register_toolchains()
-
-MIXER = "ba8ad5ca8ae77b946366e423d28b47cf3c8e1550"
+ISTIO_SHA = "9386e6c1cc95f2f405383c547b9d8329e557397b"
 
 git_repository(
-    name = "com_github_istio_mixer",
-    commit = MIXER,
-    remote = "https://github.com/istio/mixer",
+    name = "io_istio_istio",
+    commit = ISTIO_SHA,
+    remote = "https://github.com/istio/istio",
 )
+
+load("@proxy//src/envoy/mixer/integration_test:repositories.bzl", "mixer_test_repositories")
+mixer_test_repositories()

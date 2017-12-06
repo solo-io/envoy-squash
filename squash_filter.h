@@ -17,7 +17,7 @@ namespace Squash {
 
 class SquashFilter : public Envoy::Http::StreamDecoderFilter,  public Envoy::Logger::Loggable<Envoy::Logger::Id::filter> , public Envoy::Http::AsyncClient::Callbacks{
 public:
-  SquashFilter(Envoy::Upstream::ClusterManager& cm);
+  SquashFilter(Envoy::Upstream::ClusterManager& cm, const std::string& squash_cluster_name);
   ~SquashFilter();
 
   // Http::StreamFilterBase
@@ -36,6 +36,7 @@ public:
 private:
   Envoy::Http::StreamDecoderFilterCallbacks* decoder_callbacks_;
   Envoy::Upstream::ClusterManager& cm_;
+  std::string squash_cluster_name_;
   enum State {
     INITIAL,
     CREATE_CONFIG,
