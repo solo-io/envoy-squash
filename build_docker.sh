@@ -15,8 +15,6 @@ DEBUG_IMAGE_NAME=${DEBUG_IMAGE_NAME:-${REPO}/${PROJECT}/envoy-debug:${TAG}}
 
 
 BAZEL_TARGET_DIR="bazel-bin/"
-rm -f ${BAZEL_TARGET_DIR}/envoy
-# bazel build -c dbg //:envoy
 
 cp ../proxy/tools/deb/istio-iptables.sh ${BAZEL_TARGET_DIR}
 cp ../proxy/tools/deb/istio-start.sh ${BAZEL_TARGET_DIR}
