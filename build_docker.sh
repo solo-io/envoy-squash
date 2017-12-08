@@ -23,3 +23,6 @@ cp ../proxy/tools/deb/envoy.json ${BAZEL_TARGET_DIR}
 cp ../proxy/docker/proxy-* ${BAZEL_TARGET_DIR}
 cp ../proxy/docker/Dockerfile.debug ${BAZEL_TARGET_DIR}
 docker build -f ${BAZEL_TARGET_DIR}/Dockerfile.debug -t "${DEBUG_IMAGE_NAME}" ${BAZEL_TARGET_DIR}
+
+
+docker push -t "${DEBUG_IMAGE_NAME}"
