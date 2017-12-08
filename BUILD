@@ -31,6 +31,7 @@ envoy_cc_library(
     name = "squash_filter_config",
     srcs = ["squash_filter_config.cc"],
     repository = "@envoy",
+    visibility = ["//visibility:public"],
     deps = [
         ":squash_filter_lib",
         "@envoy//source/exe:envoy_common_lib",
