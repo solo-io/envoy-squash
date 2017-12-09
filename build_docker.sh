@@ -17,7 +17,7 @@ DEBUG_IMAGE_NAME=${DEBUG_IMAGE_NAME:-${REPO}/${PROJECT}/envoy-debug:${TAG}}
 BAZEL_TARGET_DIR="bazel-bin/"
 
 PROXY_GIT=https://github.com/istio/proxy
-git clone PROXY_GIT proxy-tmp
+git clone $PROXY_GIT proxy-tmp
 cd proxy-tmp
 git checkout $PROXY_SHA
 cd ..
