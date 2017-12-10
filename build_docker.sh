@@ -37,4 +37,4 @@ rm -rf proxy-tmp
 docker build -f ${BAZEL_TARGET_DIR}/Dockerfile.debug -t "${DEBUG_IMAGE_NAME}" ${BAZEL_TARGET_DIR}
 
 
-docker push -t "${DEBUG_IMAGE_NAME}"
+docker push  "${DEBUG_IMAGE_NAME}"
