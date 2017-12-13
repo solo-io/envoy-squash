@@ -17,7 +17,7 @@ namespace Squash {
 
 class SquashFilter : public Envoy::Http::StreamDecoderFilter,  public Envoy::Logger::Loggable<Envoy::Logger::Id::filter> , public Envoy::Http::AsyncClient::Callbacks{
 public:
-  SquashFilter(Envoy::Upstream::ClusterManager& cm, const std::string& squash_cluster_name);
+  SquashFilter(Envoy::Upstream::ClusterManager& cm, const std::string& squash_cluster_name, const std::string& attachment_json);
   ~SquashFilter();
 
   // Http::StreamFilterBase
@@ -36,20 +36,25 @@ public:
 private:
   Envoy::Http::StreamDecoderFilterCallbacks* decoder_callbacks_;
   Envoy::Upstream::ClusterManager& cm_;
-  std::string squash_cluster_name_;
+  const std::string& squash_cluster_name_;
+  const std::string& attachment_json_;
   enum State {
     INITIAL,
     CREATE_CONFIG,
     CHECK_ATTACHMENT,
   };
   State state_;
-  std::string debugConfigId_;
+  std::string debugConfigPath_;
   Envoy::Optional<std::chrono::milliseconds> timeout_;
   uint retry_count_;
   Envoy::Event::TimerPtr delay_timer_;
   Envoy::Http::AsyncClient::Request* in_flight_request_;
   
   void pollForAttachment();
+  const Envoy::Http::LowerCaseString& squashHeaderKey();
+  const std::string& postAttachmentPath();
+  const std::string& severAuthority();
+
 };
 
 } // Http
