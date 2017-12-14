@@ -12,15 +12,21 @@ envoy_cc_binary(
     repository = "@envoy",
     deps = [
         ":squash_filter_config",
-        "@proxy//src/envoy/mixer:filter_lib",
         "@envoy//source/exe:envoy_main_entry_lib",
+        "@proxy//src/envoy/mixer:filter_lib",
     ],
 )
 
 envoy_cc_library(
     name = "squash_filter_lib",
-    srcs = ["squash_filter.cc", "squash_filter_config.cc"],
-    hdrs = ["squash_filter.h", "squash_filter_config.h"],
+    srcs = [
+        "squash_filter.cc",
+        "squash_filter_config.cc",
+    ],
+    hdrs = [
+        "squash_filter.h",
+        "squash_filter_config.h",
+    ],
     repository = "@envoy",
     deps = [
         ":squash_cc_proto",
@@ -31,14 +37,13 @@ envoy_cc_library(
 proto_library(
     name = "squash_proto",
     srcs = ["squash.proto"],
-    deps = ["@com_google_protobuf//:duration_proto",],
+    deps = ["@com_google_protobuf//:duration_proto"],
 )
 
 cc_proto_library(
     name = "squash_cc_proto",
     deps = [":squash_proto"],
 )
-
 
 envoy_cc_library(
     name = "squash_filter_config",
@@ -59,7 +64,7 @@ envoy_cc_test(
     repository = "@envoy",
     deps = [
         ":squash_filter_config",
+        "@envoy//test/integration:http_integration_lib",
         "@envoy//test/integration:integration_lib",
-        "@envoy//test/integration:http_integration_lib"
     ],
 )
