@@ -19,17 +19,31 @@ envoy_cc_binary(
 
 envoy_cc_library(
     name = "squash_filter_lib",
-    srcs = ["squash_filter.cc"],
-    hdrs = ["squash_filter.h"],
+    srcs = ["squash_filter.cc", "squash_filter_config.cc"],
+    hdrs = ["squash_filter.h", "squash_filter_config.h"],
     repository = "@envoy",
     deps = [
+        ":squash_cc_proto",
         "@envoy//source/exe:envoy_common_lib",
     ],
 )
 
+proto_library(
+    name = "squash_proto",
+    srcs = ["squash.proto"],
+    deps = ["@com_google_protobuf//:duration_proto",],
+)
+
+cc_proto_library(
+    name = "squash_cc_proto",
+    deps = [":squash_proto"],
+)
+
+
 envoy_cc_library(
     name = "squash_filter_config",
-    srcs = ["squash_filter_config.cc"],
+    srcs = ["squash_filter_config_factory.cc"],
+    hdrs = ["squash_filter_config_factory.h"],
     repository = "@envoy",
     visibility = ["//visibility:public"],
     deps = [
@@ -41,7 +55,7 @@ envoy_cc_library(
 envoy_cc_test(
     name = "squash_filter_integration_test",
     srcs = ["squash_filter_integration_test.cc"],
-    data = [":envoy-test.conf"],
+    data = [":envoy-test.yaml"],
     repository = "@envoy",
     deps = [
         ":squash_filter_config",

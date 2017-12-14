@@ -17,17 +17,15 @@
 namespace Solo {
 namespace Squash {
 
-const int MAX_RETRY = 60;
-
-SquashFilter::SquashFilter(Envoy::Upstream::ClusterManager& cm, const std::string& squash_cluster_name, const std::string& attachment_json) :
+SquashFilter::SquashFilter(SquashFilterConfigSharedPtr config, Envoy::Upstream::ClusterManager& cm) :
+  config_(config),
   cm_(cm),
-  squash_cluster_name_(squash_cluster_name),
-  attachment_json_(attachment_json),
+  decoder_callbacks_(nullptr),
   state_(SquashFilter::INITIAL),
-  timeout_(std::chrono::milliseconds(1000)),
-  retry_count_(0),
+  debugConfigPath_(),
   delay_timer_(nullptr),
-  in_flight_request_(nullptr) {}
+  in_flight_request_(nullptr),
+  request_deadline_() {}
 
 SquashFilter::~SquashFilter() {}
 
@@ -45,7 +43,7 @@ void SquashFilter::onDestroy() {
 
 Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::HeaderMap& headers, bool ) {
 
-  if (squash_cluster_name_.empty()) {
+  if (config_->squash_cluster_name().empty()) {
     ENVOY_LOG(warn, "Squash: cluster not configured. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;
   }
@@ -70,10 +68,16 @@ Envoy::Http::FilterHeadersStatus SquashFilter::decodeHeaders(Envoy::Http::Header
   request->headers().insertPath().value().setReference(postAttachmentPath());
   request->headers().insertHost().value().setReference(severAuthority());
   request->headers().insertMethod().value().setReference(Envoy::Http::Headers::get().MethodValues.Post);
-  request->body().reset(new Envoy::Buffer::OwnedImpl(attachment_json_));
+  request->body().reset(new Envoy::Buffer::OwnedImpl(config_->attachment_json()));
 
   state_ = CREATE_CONFIG;
-  in_flight_request_ = cm_.httpAsyncClientForCluster(squash_cluster_name_).send(std::move(request), *this, timeout_);
+  in_flight_request_ = cm_.httpAsyncClientForCluster(config_->squash_cluster_name()).send(std::move(request), *this, config_->squash_request_timeout());
+  
+  if (in_flight_request_ == nullptr) {
+    state_ = INITIAL;
+    return Envoy::Http::FilterHeadersStatus::Continue;
+  
+  }
 
   return Envoy::Http::FilterHeadersStatus::StopIteration;
 }
@@ -99,12 +103,10 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
     // get the config object that was created
     if (m->headers().Status()->value() != "201") {
       ENVOY_LOG(info, "Squash: can't create attachment object. status {} - not squashing", m->headers().Status()->value().c_str());
-  
-      state_ = INITIAL;
-      delay_timer_.reset();
-      decoder_callbacks_->continueDecoding();
+      doneSquashing();
     } else {
       state_ = CHECK_ATTACHMENT;
+      request_deadline_ = std::chrono::steady_clock::now() + config_->attachment_timeout();
 
       std::string debugConfigId;
       try {
@@ -115,12 +117,9 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
       }
 
       if (debugConfigId.empty()) {
-        state_ = INITIAL;
-        delay_timer_.reset();
-        decoder_callbacks_->continueDecoding();
+        doneSquashing();
       } else {
         debugConfigPath_ = "/api/v2/debugattachment/" + debugConfigId;
-        retry_count_ = 0;
         pollForAttachment();
       }
     }
@@ -129,27 +128,22 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
   }
   case CHECK_ATTACHMENT: {
 
-    std::string state;
+    std::string attachmentstate;
     try {
       Envoy::Json::ObjectSharedPtr json_config = Envoy::Json::Factory::loadFromString(jsonbody);
-      state = json_config->getObject("status", true)->getString("state", "");
+      attachmentstate = json_config->getObject("status", true)->getString("state", "");
     } catch (Envoy::Json::Exception&) {
-      // no state yet.. leave it empty
+      // no state yet.. leave it empty for the retry logic.
     }
 
-    bool attached = state == "attached";
-    bool error = state == "error";
+    bool attached = attachmentstate == "attached";
+    bool error = attachmentstate == "error";
     bool finalstate = attached || error;
 
-    if (finalstate || (retry_count_ > MAX_RETRY)) {
-      state_ = INITIAL;
-      delay_timer_.reset();
-      decoder_callbacks_->continueDecoding();
+    if (finalstate) {
+      doneSquashing();
     } else {
-      if (delay_timer_.get() == nullptr) {
-        delay_timer_ = decoder_callbacks_->dispatcher().createTimer([this]() -> void { pollForAttachment(); });
-      }
-      delay_timer_->enableTimer(std::chrono::milliseconds(1000));
+      maybeRetry();
     }
     break;
   }
@@ -157,25 +151,39 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr&& m) {
 }
 
 void SquashFilter::onFailure(Envoy::Http::AsyncClient::FailureReason) {
+  bool cleanupneeded = in_flight_request_ != nullptr;
   in_flight_request_ = nullptr;
-  // increase retry count and try again.
-  if ((state_ != CHECK_ATTACHMENT) || (retry_count_ > MAX_RETRY)) {
-    state_ = INITIAL;
-    delay_timer_.reset();
-    decoder_callbacks_->continueDecoding();
+  if (state_ == CREATE_CONFIG) {
+    // no retries here, as we couldnt create the attachment object.
+    if (cleanupneeded) {
+      // cleanup not needed of onFailure called inline in async client send.
+      doneSquashing();
+    }
+    return;
+  }
+  maybeRetry();
+}
+
+void SquashFilter::maybeRetry() {
+  
+  if ((state_ != CHECK_ATTACHMENT) || (request_deadline_ <= std::chrono::steady_clock::now())) {
+    doneSquashing();
   } else {
-    pollForAttachment();
+      if (delay_timer_.get() == nullptr) {
+        delay_timer_ = decoder_callbacks_->dispatcher().createTimer([this]() -> void { pollForAttachment(); });
+      }
+      delay_timer_->enableTimer(config_->attachment_poll_every());
   }
 }
 
 void SquashFilter::pollForAttachment() {
-  retry_count_++;
   Envoy::Http::MessagePtr request(new Envoy::Http::RequestMessageImpl());
   request->headers().insertMethod().value().setReference(Envoy::Http::Headers::get().MethodValues.Get);
   request->headers().insertPath().value().setReference(debugConfigPath_);
   request->headers().insertHost().value().setReference(severAuthority());
   
-  in_flight_request_ = cm_.httpAsyncClientForCluster(squash_cluster_name_).send(std::move(request), *this, timeout_);
+  in_flight_request_ = cm_.httpAsyncClientForCluster(config_->squash_cluster_name()).send(std::move(request), *this, config_->squash_request_timeout());
+  // no need to check in_flight_request_ is null as onFailure will take care of that.
 }
 
 Envoy::Http::FilterDataStatus SquashFilter::decodeData(Envoy::Buffer::Instance& , bool ) {
@@ -211,6 +219,22 @@ const std::string& SquashFilter::postAttachmentPath() {
 const std::string& SquashFilter::severAuthority() {
   static std::string* val = new std::string("squash-server");
   return *val;
+}
+
+void SquashFilter::doneSquashing() {
+  state_ = INITIAL;
+  if (delay_timer_) {
+    delay_timer_->disableTimer();
+    delay_timer_.reset();
+  }
+
+  if (in_flight_request_ != nullptr) {
+    in_flight_request_->cancel();
+    in_flight_request_ = nullptr;
+  }
+
+  decoder_callbacks_->continueDecoding();
+
 }
 
 } // Squash

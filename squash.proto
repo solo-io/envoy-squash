@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package solo.squash.pb;
+
+import "google/protobuf/duration.proto";
+
+message SquashConfig {
+  string squash_cluster = 1;
+  string attachment_template = 2;
+  google.protobuf.Duration attachment_timeout = 3;
+  google.protobuf.Duration attachment_poll_every = 4;
+  google.protobuf.Duration squash_request_timeout = 5;
+
+}
