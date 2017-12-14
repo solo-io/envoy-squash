@@ -14,7 +14,7 @@ namespace Configuration {
 
 class SquashFilterConfigFactory
     : public Envoy::Server::Configuration::NamedHttpFilterConfigFactory,
-      Envoy::Logger::Loggable<Envoy::Logger::Id::config> {
+      protected Envoy::Logger::Loggable<Envoy::Logger::Id::config> {
 public:
   Envoy::Server::Configuration::HttpFilterFactoryCb createFilterFactory(
       const Envoy::Json::Object &json_config, const std::string &,

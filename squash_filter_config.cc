@@ -11,8 +11,6 @@
 #include "common/protobuf/protobuf.h"
 #include "common/protobuf/utility.h"
 
-// NOLINT(namespace-envoy);
-
 namespace Solo {
 namespace Squash {
 

@@ -16,9 +16,10 @@
 namespace Solo {
 namespace Squash {
 
-class SquashFilter : public Envoy::Http::StreamDecoderFilter,
-                     public Envoy::Logger::Loggable<Envoy::Logger::Id::filter>,
-                     public Envoy::Http::AsyncClient::Callbacks {
+class SquashFilter
+    : public Envoy::Http::StreamDecoderFilter,
+      protected Envoy::Logger::Loggable<Envoy::Logger::Id::filter>,
+      public Envoy::Http::AsyncClient::Callbacks {
 public:
   SquashFilter(SquashFilterConfigSharedPtr config,
                Envoy::Upstream::ClusterManager &cm);

@@ -207,4 +207,48 @@ TEST_P(SquashFilterIntegrationTest, ErrorNoSquashServer) {
   codec_client_->close();
 }
 
+TEST_P(SquashFilterIntegrationTest, BadCreateResponse) {
+
+  Envoy::IntegrationStreamDecoderPtr response = sendDebugRequest(codec_client_);
+  Envoy::FakeHttpConnectionPtr fake_squash_connection =
+      fake_upstreams_[1]->waitForHttpConnection(*dispatcher_);
+
+  // respond to create request
+  Envoy::FakeStreamPtr create_stream =
+      sendSquashCreate(fake_squash_connection, "not json...");
+
+  response->waitForEndStream();
+
+  EXPECT_STREQ("200", response->headers().Status()->value().c_str());
+
+  codec_client_->close();
+  fake_squash_connection->close();
+  fake_squash_connection->waitForDisconnect();
+}
+
+TEST_P(SquashFilterIntegrationTest, BadGetResponse) {
+
+  Envoy::IntegrationStreamDecoderPtr response = sendDebugRequest(codec_client_);
+  Envoy::FakeHttpConnectionPtr fake_squash_connection =
+      fake_upstreams_[1]->waitForHttpConnection(*dispatcher_);
+
+  // respond to create request
+  Envoy::FakeStreamPtr create_stream = sendSquashCreate(
+      fake_squash_connection, "{\"metadata\":{\"name\":\"oF8iVdiJs5\"},"
+                              "\"spec\":{\"attachment\":{\"a\":\"b\"},"
+                              "\"image\":\"debug\",\"node\":\"debug-node\"},"
+                              "\"status\":{\"state\":\"none\"}}");
+  // respond to read attachment request with error!
+  Envoy::FakeStreamPtr get_stream =
+      sendSquashOk(fake_squash_connection, "not json...");
+
+  response->waitForEndStream();
+
+  EXPECT_STREQ("200", response->headers().Status()->value().c_str());
+
+  codec_client_->close();
+  fake_squash_connection->close();
+  fake_squash_connection->waitForDisconnect();
+}
+
 } // namespace Solo

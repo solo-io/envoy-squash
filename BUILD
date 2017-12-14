@@ -68,3 +68,14 @@ envoy_cc_test(
         "@envoy//test/integration:integration_lib",
     ],
 )
+
+envoy_cc_test(
+    name = "squash_filter_test",
+    srcs = ["squash_filter_test.cc"],
+    repository = "@envoy",    
+    deps = [
+        ":squash_filter_lib",
+        "@envoy//test/mocks/upstream:upstream_mocks",
+        "@envoy//test/test_common:utility_lib",
+    ],
+)

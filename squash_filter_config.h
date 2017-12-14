@@ -1,6 +1,5 @@
 #pragma once
 
-#include <regex>
 #include <string>
 
 #include "common/common/logger.h"
@@ -12,7 +11,8 @@
 namespace Solo {
 namespace Squash {
 
-class SquashFilterConfig : Envoy::Logger::Loggable<Envoy::Logger::Id::config> {
+class SquashFilterConfig
+    : protected Envoy::Logger::Loggable<Envoy::Logger::Id::config> {
 public:
   SquashFilterConfig(const solo::squash::pb::SquashConfig &proto_config);
   const std::string &squash_cluster_name() { return squash_cluster_name_; }
