@@ -8,13 +8,16 @@
 
 #include "common/protobuf/protobuf.h"
 
+#include "envoy/server/filter_config.h"
+
 namespace Solo {
 namespace Squash {
 
 class SquashFilterConfig
     : protected Envoy::Logger::Loggable<Envoy::Logger::Id::config> {
 public:
-  SquashFilterConfig(const solo::squash::pb::SquashConfig &proto_config);
+  SquashFilterConfig(const solo::squash::pb::SquashConfig &proto_config,
+                     Envoy::Server::Configuration::FactoryContext &context);
   const std::string &squash_cluster_name() { return squash_cluster_name_; }
   const std::string &attachment_json() { return attachment_json_; }
   const std::chrono::milliseconds &attachment_timeout() {

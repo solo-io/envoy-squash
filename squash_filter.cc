@@ -39,26 +39,14 @@ void SquashFilter::onDestroy() {
 Envoy::Http::FilterHeadersStatus
 SquashFilter::decodeHeaders(Envoy::Http::HeaderMap &headers, bool) {
 
-  if (config_->squash_cluster_name().empty()) {
-    ENVOY_LOG(warn, "Squash: cluster not configured. ignoring.");
-    return Envoy::Http::FilterHeadersStatus::Continue;
-  }
-
   // check for squash header
-  const Envoy::Http::HeaderEntry *squasheader = headers.get(squashHeaderKey());
-
-  if (squasheader == nullptr) {
+  if (!headers.get(squashHeaderKey())) {
     ENVOY_LOG(warn, "Squash: no squash header. ignoring.");
     return Envoy::Http::FilterHeadersStatus::Continue;
   }
 
   ENVOY_LOG(info, "Squash:we need to squash something");
 
-  // get squash service cluster object
-  // async client to create debug config at squash server
-  // when it is done, issue a request and check if it is attached.
-  // retry until it is. or until we timeout
-  // continue decoding.
   Envoy::Http::MessagePtr request(new Envoy::Http::RequestMessageImpl());
   request->headers().insertContentType().value().setReference(
       Envoy::Http::Headers::get().ContentTypeValues.Json);

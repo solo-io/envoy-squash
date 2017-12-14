@@ -32,6 +32,10 @@ public:
         new solo::squash::pb::SquashConfig()};
   }
 
+  static void
+  translateSquashFilter(const Envoy::Json::Object &json_config,
+                        solo::squash::pb::SquashConfig &proto_config);
+
 private:
   const static std::string SQUASH_FILTER_SCHEMA;
 

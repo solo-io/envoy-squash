@@ -51,11 +51,7 @@ SquashFilterConfigFactory::createFilterFactory(
   json_config.validateSchema(SQUASH_FILTER_SCHEMA);
   solo::squash::pb::SquashConfig proto_config;
 
-  JSON_UTIL_SET_STRING(json_config, proto_config, squash_cluster);
-  JSON_UTIL_SET_STRING(json_config, proto_config, attachment_template);
-  JSON_UTIL_SET_DURATION(json_config, proto_config, attachment_timeout);
-  JSON_UTIL_SET_DURATION(json_config, proto_config, attachment_poll_every);
-  JSON_UTIL_SET_DURATION(json_config, proto_config, squash_request_timeout);
+  translateSquashFilter(json_config, proto_config);
 
   return createFilter(proto_config, context);
 }
@@ -77,8 +73,8 @@ SquashFilterConfigFactory::createFilter(
     const solo::squash::pb::SquashConfig &proto_config,
     Envoy::Server::Configuration::FactoryContext &context) {
 
-  SquashFilterConfigSharedPtr config =
-      std::make_shared<SquashFilterConfig>(SquashFilterConfig(proto_config));
+  SquashFilterConfigSharedPtr config = std::make_shared<SquashFilterConfig>(
+      SquashFilterConfig(proto_config, context));
 
   return [&context,
           config](Envoy::Http::FilterChainFactoryCallbacks &callbacks) -> void {
@@ -86,6 +82,16 @@ SquashFilterConfigFactory::createFilter(
     callbacks.addStreamDecoderFilter(
         Envoy::Http::StreamDecoderFilterSharedPtr{filter});
   };
+}
+
+void SquashFilterConfigFactory::translateSquashFilter(const Envoy::Json::Object &json_config,
+                           solo::squash::pb::SquashConfig &proto_config) {
+
+  JSON_UTIL_SET_STRING(json_config, proto_config, squash_cluster);
+  JSON_UTIL_SET_STRING(json_config, proto_config, attachment_template);
+  JSON_UTIL_SET_DURATION(json_config, proto_config, attachment_timeout);
+  JSON_UTIL_SET_DURATION(json_config, proto_config, attachment_poll_every);
+  JSON_UTIL_SET_DURATION(json_config, proto_config, squash_request_timeout);
 }
 
 /**

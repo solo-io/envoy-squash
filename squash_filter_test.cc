@@ -5,6 +5,7 @@
 #include "squash_filter_config.h"
 
 #include "test/mocks/upstream/mocks.h"
+#include "test/mocks/server/mocks.h"
 #include "test/test_common/utility.h"
 
 #include "gmock/gmock.h"
@@ -20,9 +21,11 @@ namespace Squash {
 TEST(SoloFilterTest, DecodeHeaderContinuesOnClientFail) {
 
   NiceMock<Envoy::Upstream::MockClusterManager> cm;
+  NiceMock<Envoy::Server::Configuration::MockFactoryContext> factory_context;
+  
   solo::squash::pb::SquashConfig p;
   p.set_squash_cluster("squash");
-  SquashFilterConfigSharedPtr config(new SquashFilterConfig(p));
+  SquashFilterConfigSharedPtr config(new SquashFilterConfig(p, factory_context));
   EXPECT_CALL(cm, httpAsyncClientForCluster("squash"))
       .WillOnce(ReturnRef(cm.async_client_));
 

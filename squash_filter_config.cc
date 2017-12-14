@@ -29,7 +29,8 @@ const std::string SquashFilterConfig::DEFAULT_ATTACHMENT_TEMPLATE(R"EOF(
   )EOF");
 
 SquashFilterConfig::SquashFilterConfig(
-    const solo::squash::pb::SquashConfig &proto_config)
+    const solo::squash::pb::SquashConfig &proto_config,
+    Envoy::Server::Configuration::FactoryContext &context)
     : squash_cluster_name_(proto_config.squash_cluster()),
       attachment_json_(getAttachment(proto_config.attachment_template())),
       attachment_timeout_(
@@ -40,6 +41,10 @@ SquashFilterConfig::SquashFilterConfig(
           proto_config, squash_request_timeout, 1000)) {
   if (attachment_json_.empty()) {
     attachment_json_ = getAttachment(DEFAULT_ATTACHMENT_TEMPLATE);
+  }
+  if (!context.clusterManager().get(squash_cluster_name_)) {
+    throw Envoy::EnvoyException(fmt::format(
+        "squash filter: unknown cluster '{}' in squash config", squash_cluster_name_));
   }
 }
 
