@@ -1,21 +1,23 @@
-#include <string>
 #include <regex>
+#include <string>
 
 #include "common/common/logger.h"
 
-#include "squash_filter_config.h"
 #include "squash_filter.h"
+#include "squash_filter_config.h"
 
 #include "squash.pb.h"
 
 #include "common/protobuf/protobuf.h"
 #include "common/protobuf/utility.h"
 
+// NOLINT(namespace-envoy);
+
 namespace Solo {
 namespace Squash {
 
 namespace Protobuf = Envoy::Protobuf;
-  
+
 const std::string SquashFilterConfig::DEFAULT_ATTACHMENT_TEMPLATE(R"EOF(
   {
     "spec" : {
@@ -28,52 +30,58 @@ const std::string SquashFilterConfig::DEFAULT_ATTACHMENT_TEMPLATE(R"EOF(
   }
   )EOF");
 
-SquashFilterConfig::SquashFilterConfig(const solo::squash::pb::SquashConfig& proto_config) :
-  squash_cluster_name_(proto_config.squash_cluster()),
-  attachment_json_(getAttachment(proto_config.attachment_template())),
-  attachment_timeout_(PROTOBUF_GET_MS_OR_DEFAULT(proto_config, attachment_timeout, 60000)),
-  attachment_poll_every_(PROTOBUF_GET_MS_OR_DEFAULT(proto_config, attachment_poll_every, 1000)),
-  squash_request_timeout_(PROTOBUF_GET_MS_OR_DEFAULT(proto_config, squash_request_timeout, 1000))
-  {
-    if (attachment_json_.empty()) {
-      attachment_json_ = getAttachment(DEFAULT_ATTACHMENT_TEMPLATE);
-    }
+SquashFilterConfig::SquashFilterConfig(
+    const solo::squash::pb::SquashConfig &proto_config)
+    : squash_cluster_name_(proto_config.squash_cluster()),
+      attachment_json_(getAttachment(proto_config.attachment_template())),
+      attachment_timeout_(
+          PROTOBUF_GET_MS_OR_DEFAULT(proto_config, attachment_timeout, 60000)),
+      attachment_poll_every_(PROTOBUF_GET_MS_OR_DEFAULT(
+          proto_config, attachment_poll_every, 1000)),
+      squash_request_timeout_(PROTOBUF_GET_MS_OR_DEFAULT(
+          proto_config, squash_request_timeout, 1000)) {
+  if (attachment_json_.empty()) {
+    attachment_json_ = getAttachment(DEFAULT_ATTACHMENT_TEMPLATE);
   }
+}
 
-std::string SquashFilterConfig::getAttachment(const std::string& attachment_template) {
+std::string
+SquashFilterConfig::getAttachment(const std::string &attachment_template) {
   std::string s;
 
   const std::regex env_regex("\\{\\{ ([a-zA-Z_]+) \\}\\}");
 
   auto end_last_match = attachment_template.begin();
 
-  auto callback = [&s, &attachment_template, &end_last_match](const std::match_results<std::string::const_iterator>& match)
-  {
-      auto start_match =  attachment_template.begin() + match.position(0);
+  auto callback =
+      [&s, &attachment_template, &end_last_match](
+          const std::match_results<std::string::const_iterator> &match) {
+        auto start_match = attachment_template.begin() + match.position(0);
 
-      s.append(end_last_match, start_match);
+        s.append(end_last_match, start_match);
 
-      std::string envar_key = match[1].str();
-      const char* env = std::getenv(envar_key.c_str());
-      s.append("\"");
-      if (env == nullptr) {
-        ENVOY_LOG(warn, "Squash: no env for {}.", envar_key);
-      } else {
-        s.append(env);
-      }
-      s.append("\"");
+        std::string envar_key = match[1].str();
+        const char *env = std::getenv(envar_key.c_str());
+        s.append("\"");
+        if (env == nullptr) {
+          ENVOY_LOG(warn, "Squash: no env for {}.", envar_key);
+        } else {
+          s.append(env);
+        }
+        s.append("\"");
 
-      end_last_match = start_match + match.length(0);
-  };
+        end_last_match = start_match + match.length(0);
+      };
 
-  std::sregex_iterator begin(attachment_template.begin(), attachment_template.end(), env_regex), end;
+  std::sregex_iterator begin(attachment_template.begin(),
+                             attachment_template.end(), env_regex),
+      end;
   std::for_each(begin, end, callback);
 
   s.append(end_last_match, attachment_template.end());
 
   return s;
-
 }
 
-} // Squash
-} // Solo
+} // namespace Squash
+} // namespace Solo
