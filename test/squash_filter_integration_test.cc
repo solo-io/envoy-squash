@@ -34,7 +34,7 @@ public:
 
     ::setenv("SQUASH_ENV_TEST", ENV_VAR_VALUE, 1);
 
-    createTestServer("envoy-test.yaml", {"http"});
+    createTestServer("test/envoy-test.yaml", {"http"});
 
     codec_client_ = makeHttpConnection(lookupPort("http"));
   }
@@ -177,8 +177,8 @@ TEST_P(SquashFilterIntegrationTest, TimeoutAttaching) {
                               "\"spec\":{\"attachment\":{\"a\":\"b\"},"
                               "\"image\":\"debug\",\"node\":\"debug-node\"},"
                               "\"status\":{\"state\":\"none\"}}");
-  // respond to read attachment. since attachment_timeout is 0 in the filter
-  // config, just one response is enough
+  // respond to read attachment. since attachment_timeout is smaller than the squash
+  // attachment_poll_every  config, just one response is enough
   Envoy::FakeStreamPtr get_stream =
       sendSquashOk(fake_squash_connection,
                    "{\"metadata\":{\"name\":\"oF8iVdiJs5\"},\"spec\":{"

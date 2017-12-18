@@ -2,6 +2,7 @@
 #include <string>
 
 #include "common/common/logger.h"
+#include "common/common/utility.h"
 
 #include "squash_filter.h"
 #include "squash_filter_config.h"
@@ -20,8 +21,8 @@ const std::string SquashFilterConfig::DEFAULT_ATTACHMENT_TEMPLATE(R"EOF(
   {
     "spec" : {
       "attachment" : {
-        "pod": {{ POD_NAME }},
-        "namespace": {{ POD_NAMESPACE }},
+        "pod": "{{ POD_NAME }}",
+        "namespace": "{{ POD_NAMESPACE }}"
       },
       "match_request":true
     }
@@ -53,7 +54,6 @@ SquashFilterConfig::getAttachment(const std::string &attachment_template) {
   std::string s;
 
   const std::regex env_regex("\\{\\{ ([a-zA-Z_]+) \\}\\}");
-
   auto end_last_match = attachment_template.begin();
 
   auto callback =
@@ -63,16 +63,13 @@ SquashFilterConfig::getAttachment(const std::string &attachment_template) {
 
         s.append(end_last_match, start_match);
 
-        std::string envar_key = match[1].str();
-        const char *env = std::getenv(envar_key.c_str());
-        s.append("\"");
-        if (env == nullptr) {
-          ENVOY_LOG(warn, "Squash: no env for {}.", envar_key);
+        std::string envar_name = match[1].str();
+        const char *envar_value = std::getenv(envar_name.c_str());
+        if (envar_value == nullptr) {
+          ENVOY_LOG(info, "Squash: no environment variable named {}.", envar_name);
         } else {
-          s.append(env);
+          s.append(Envoy::StringUtil::escape(envar_value));
         }
-        s.append("\"");
-
         end_last_match = start_match + match.length(0);
       };
 
@@ -80,7 +77,6 @@ SquashFilterConfig::getAttachment(const std::string &attachment_template) {
                              attachment_template.end(), env_regex),
       end;
   std::for_each(begin, end, callback);
-
   s.append(end_last_match, attachment_template.end());
 
   return s;

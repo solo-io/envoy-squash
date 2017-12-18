@@ -55,15 +55,15 @@ private:
   State state_;
   std::string debugConfigPath_;
   Envoy::Event::TimerPtr delay_timer_;
+  Envoy::Event::TimerPtr attachment_timeout_timer_;
   Envoy::Http::AsyncClient::Request *in_flight_request_;
-  std::chrono::time_point<std::chrono::steady_clock> request_deadline_;
 
   void pollForAttachment();
   void doneSquashing();
   const Envoy::Http::LowerCaseString &squashHeaderKey();
   const std::string &postAttachmentPath();
   const std::string &severAuthority();
-  void maybeRetry();
+  void retry();
 };
 
 } // namespace Squash

@@ -21,9 +21,12 @@ static_resources:
           - name: squash
             config:
               squash_cluster: squash
-              attachment_template: '{"spec": { "attachment" : { "env": {{ SQUASH_ENV_TEST }} } } }'
+              attachment_template: '{"spec": { "attachment" : { "env": "{{ SQUASH_ENV_TEST }}" } } }'
               attachment_timeout:
                 seconds: 0
+                nanos: 100000000
+              attachment_poll_every:
+                seconds: 1
                 nanos: 0
               squash_request_timeout:
                 seconds: 0

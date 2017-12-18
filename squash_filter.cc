@@ -20,8 +20,8 @@ namespace Squash {
 SquashFilter::SquashFilter(SquashFilterConfigSharedPtr config,
                            Envoy::Upstream::ClusterManager &cm)
     : config_(config), cm_(cm), decoder_callbacks_(nullptr),
-      state_(SquashFilter::INITIAL), debugConfigPath_(), delay_timer_(nullptr),
-      in_flight_request_(nullptr), request_deadline_() {}
+      state_(SquashFilter::INITIAL), debugConfigPath_(), delay_timer_(nullptr), 
+      attachment_timeout_timer_(nullptr), in_flight_request_(nullptr) {}
 
 SquashFilter::~SquashFilter() {}
 
@@ -29,6 +29,11 @@ void SquashFilter::onDestroy() {
   if (in_flight_request_ != nullptr) {
     in_flight_request_->cancel();
     in_flight_request_ = nullptr;
+  }
+
+  if (attachment_timeout_timer_) {
+    attachment_timeout_timer_->disableTimer();
+    attachment_timeout_timer_.reset();
   }
 
   if (delay_timer_.get() != nullptr) {
@@ -67,6 +72,14 @@ SquashFilter::decodeHeaders(Envoy::Http::HeaderMap &headers, bool) {
     return Envoy::Http::FilterHeadersStatus::Continue;
   }
 
+  attachment_timeout_timer_ = decoder_callbacks_->dispatcher().createTimer(
+      [this]() -> void { doneSquashing(); });
+  attachment_timeout_timer_->enableTimer(config_->attachment_timeout());
+  // check if the timer expired inline.
+  if (state_ == INITIAL) {
+    return Envoy::Http::FilterHeadersStatus::Continue;
+  }
+
   return Envoy::Http::FilterHeadersStatus::StopIteration;
 }
 
@@ -80,8 +93,7 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr &&m) {
   for (Envoy::Buffer::RawSlice &slice : slices) {
     jsonbody += std::string(static_cast<const char *>(slice.mem_), slice.len_);
   }
-  // if state === create config; state = creaed; if state == created ; state =
-  // null
+  
   switch (state_) {
 
   case INITIAL: {
@@ -98,8 +110,6 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr &&m) {
       doneSquashing();
     } else {
       state_ = CHECK_ATTACHMENT;
-      request_deadline_ =
-          std::chrono::steady_clock::now() + config_->attachment_timeout();
 
       std::string debugConfigId;
       try {
@@ -140,7 +150,7 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr &&m) {
     if (finalstate) {
       doneSquashing();
     } else {
-      maybeRetry();
+      retry();
     }
     break;
   }
@@ -150,29 +160,34 @@ void SquashFilter::onSuccess(Envoy::Http::MessagePtr &&m) {
 void SquashFilter::onFailure(Envoy::Http::AsyncClient::FailureReason) {
   bool cleanupneeded = in_flight_request_ != nullptr;
   in_flight_request_ = nullptr;
-  if (state_ == CREATE_CONFIG) {
-    // no retries here, as we couldnt create the attachment object.
-    if (cleanupneeded) {
-      // cleanup not needed of onFailure called inline in async client send.
-      doneSquashing();
+  switch (state_) {
+    case INITIAL: {
+      break;
     }
-    return;
+    case CREATE_CONFIG: {
+      // no retries here, as we couldnt create the attachment object.
+      if (cleanupneeded) {
+        // cleanup not needed if onFailure called inline in async client send.
+        // this means that decodeHeaders is down the stack and will return Continue.
+        doneSquashing();
+      }
+      break;
+    }
+    case CHECK_ATTACHMENT: {
+      retry();
+      break;
+    }
   }
-  maybeRetry();
 }
 
-void SquashFilter::maybeRetry() {
+void SquashFilter::retry() {
 
-  if ((state_ != CHECK_ATTACHMENT) ||
-      (request_deadline_ <= std::chrono::steady_clock::now())) {
-    doneSquashing();
-  } else {
-    if (delay_timer_.get() == nullptr) {
-      delay_timer_ = decoder_callbacks_->dispatcher().createTimer(
-          [this]() -> void { pollForAttachment(); });
-    }
-    delay_timer_->enableTimer(config_->attachment_poll_every());
+  if (delay_timer_.get() == nullptr) {
+    delay_timer_ = decoder_callbacks_->dispatcher().createTimer(
+        [this]() -> void { pollForAttachment(); });
   }
+  delay_timer_->enableTimer(config_->attachment_poll_every());
+
 }
 
 void SquashFilter::pollForAttachment() {
@@ -233,6 +248,11 @@ void SquashFilter::doneSquashing() {
   if (delay_timer_) {
     delay_timer_->disableTimer();
     delay_timer_.reset();
+  }
+
+  if (attachment_timeout_timer_) {
+    attachment_timeout_timer_->disableTimer();
+    attachment_timeout_timer_.reset();
   }
 
   if (in_flight_request_ != nullptr) {
